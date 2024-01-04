@@ -1,0 +1,5 @@
+/_build/
+# Don't want to deal with paths from LBAPI
+/.vscode/
+
+test.lua
