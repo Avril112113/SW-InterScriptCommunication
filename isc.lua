@@ -3,16 +3,16 @@
 ---@alias ISC_DiscoveredFeature {isc_version:string, feature_id:string, version:string}
 
 
-local ISC_CMD_PAT = "^ISC_(%w+):([%w_]+):([%w_]+) (.*)$"
-local ISC_EVENT_FMT = "ISC_EVENT:%s:%s %s"
-local ISC_REQUEST_FMT = "ISC_REQUEST:%s:%s %s"
-local ISC_RESULT_FMT = "ISC_RESULT:%s:%s %s"
+local ISC_CMD_PAT = "^\xFC(.):([%w_]+):([%w_]+) (.*)$"
+local ISC_EVENT_FMT = "\xFC\x01:%s:%s %s"
+local ISC_REQUEST_FMT = "\xFC\x02:%s:%s %s"
+local ISC_RESULT_FMT = "\xFC\x03:%s:%s %s"
 
 
 ---@class ISC
 ISC = {}
 ISC.VERSION = "0.1.0"
-ISC.VERBOSE_LOG = true
+ISC.VERBOSE_LOG = false
 
 ---@type table<string, {}>
 ISC.discovered_features = {}
@@ -214,7 +214,7 @@ function ISC.onCustomCommand(full_message)
 	if isc_type == nil or feature_id == nil or name == nil or data == nil then
 		return false
 	end
-	if isc_type == "EVENT" then
+	if isc_type == "\x01" then  -- Event
 		local isc_events = ISC.events[feature_id]
 		if isc_events == nil then
 			if ISC.VERBOSE_LOG then
@@ -234,7 +234,7 @@ function ISC.onCustomCommand(full_message)
 		end
 		event._run_handlers(ISC._decode_data(event.data_spec, data))
 		return true
-	elseif isc_type == "REQUEST" then
+	elseif isc_type == "\x02" then  -- Request
 		local isc_requests = ISC.requests[feature_id]
 		if isc_requests == nil then
 			if ISC.VERBOSE_LOG then
@@ -254,7 +254,7 @@ function ISC.onCustomCommand(full_message)
 		end
 		request._run_handler(ISC._decode_data(request.data_spec, data))
 		return true
-	elseif isc_type == "RESULT" then
+	elseif isc_type == "\x03" then  -- Result
 		if ISC._awaiting_result then
 			local isc_requests = ISC.requests[feature_id]
 			if isc_requests == nil then
