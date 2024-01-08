@@ -240,8 +240,8 @@ function ISC.sendFeatureDiscoveryEvent(feature_id, version)
 	})
 end
 
-
----@type ISC_Event<ISC_DiscoveredFeature>
+--                 \/ Coped from ISC_DiscoveredFeature
+---@type ISC_Event<{isc_version:string, feature_id:string, version:string}> # ISC:discovery
 ISC._feature_discovery_event = ISC.registerEvent("ISC", "discovery", function(data) return string.pack("zzz", data.feature_id, data.isc_version, data.version) end, function(packed_data) local _1, _2, _3 = string.unpack("zzz", packed_data) return {feature_id=_1,isc_version=_2,version=_3,} end)
 
 

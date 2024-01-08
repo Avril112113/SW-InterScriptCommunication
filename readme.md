@@ -16,4 +16,3 @@ It's possible to add multiple handlers to a request with in different addons.
 
 ## TODO
 Commands to trigger events and requests.  
-Offset all bytes by +1 during encode and -1 during decode, since null bytes are the most common and the 4 byte special sequence can be pricey on string length.  

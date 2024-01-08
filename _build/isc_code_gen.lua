@@ -20,7 +20,7 @@ local function _get_sorted_spec_keys(spec)
 	return sorted_keys
 end
 
----@param spec table
+---@param spec table|string
 function ISC_Code_Gen._gen_encode_code(spec)
 	local tmp_names, tmp_name_idx = {}, 1
 	local function _get_tmp_name()
@@ -83,9 +83,21 @@ function ISC_Code_Gen._gen_encode_code(spec)
 			error(("Unsupported ISC spec type '%s'"):format(_spec))
 		end
 	end
-	_gen(spec, "data")
-	local encode_code = ("function(data) return string.pack(\"%s\", %s) end"):format(table.concat(pack_fmt), table.concat(pack_args, ", "))
-	local decode_code = ("function(packed_data) local %s = string.unpack(\"%s\", packed_data) return %s end"):format(table.concat(tmp_names, ", "), table.concat(pack_fmt), table.concat(result_parts))
+	local encode_code
+	local decode_code
+	if spec == "nil" then
+		encode_code = "function(data) return \"\" end"
+		decode_code = "function(packed_data) return nil end"
+	else
+		_gen(spec, "data")
+		if #tmp_names > 0 then
+			encode_code = ("function(data) return string.pack(\"%s\", %s) end"):format(table.concat(pack_fmt), table.concat(pack_args, ", "))
+			decode_code = ("function(packed_data) local %s = string.unpack(\"%s\", packed_data) return %s end"):format(table.concat(tmp_names, ", "), table.concat(pack_fmt), table.concat(result_parts))
+		else
+			encode_code = "function(data) return \"\" end"
+			decode_code = "function(packed_data) return {} end"
+		end
+	end
 	local type_comment = table.concat(type_parts)
 	return encode_code, decode_code, type_comment
 end
@@ -96,6 +108,10 @@ function ISC_Code_Gen._validate_name(s)
 	return type(s) == "string" and s:match("^[%w%d_]+$")
 end
 
+---@param feature_id string
+---@param name string
+---@param data_spec any
+---@return string?, string?
 function ISC_Code_Gen.gen_event(feature_id, name, data_spec)
 	if not ISC_Code_Gen._validate_name(feature_id) then
 		return nil, "Invalid feature_id"
@@ -106,6 +122,11 @@ function ISC_Code_Gen.gen_event(feature_id, name, data_spec)
 	return ("---@type ISC_Event<%s>\n%s = ISC.registerEvent(\"%s\", \"%s\", %s, %s)"):format(type_data_comment, name, feature_id, name, encode_data_code, decode_data_code)
 end
 
+---@param feature_id string
+---@param name string
+---@param data_spec any
+---@param result_spec any
+---@return string?, string?
 function ISC_Code_Gen.gen_request(feature_id, name, data_spec, result_spec)
 	if not ISC_Code_Gen._validate_name(feature_id) then
 		return nil, "Invalid feature_id"
@@ -119,7 +140,7 @@ end
 
 
 local args = {...}
-if #args > 0 then
+if #args >= 2 and not args[1]:match("isc_code_gen") then
 	local feature_id = args[1]
 	local name = args[2]
 
