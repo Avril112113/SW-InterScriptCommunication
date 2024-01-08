@@ -87,15 +87,15 @@ function ISC_Code_Gen._gen_encode_code(spec)
 	local decode_code
 	if spec == "nil" then
 		encode_code = "function(data) return \"\" end"
-		decode_code = "function(packed_data) return nil end"
+		decode_code = "function(encoded_data) return nil end"
 	else
 		_gen(spec, "data")
 		if #tmp_names > 0 then
 			encode_code = ("function(data) return string.pack(\"%s\", %s) end"):format(table.concat(pack_fmt), table.concat(pack_args, ", "))
-			decode_code = ("function(packed_data) local %s = string.unpack(\"%s\", packed_data) return %s end"):format(table.concat(tmp_names, ", "), table.concat(pack_fmt), table.concat(result_parts))
+			decode_code = ("function(encoded_data) local %s = string.unpack(\"%s\", encoded_data) return %s end"):format(table.concat(tmp_names, ", "), table.concat(pack_fmt), table.concat(result_parts))
 		else
 			encode_code = "function(data) return \"\" end"
-			decode_code = "function(packed_data) return {} end"
+			decode_code = "function(encoded_data) return {} end"
 		end
 	end
 	local type_comment = table.concat(type_parts)
