@@ -78,8 +78,8 @@ return function(workspaceRoot, inputFile)
 				suffix = ""
 			end
 			if middle ~= nil then
-				feature_id = feature_id or middle:match("\"(.-)\"")
-				name = name or middle:match(", \"(.-)\"")
+				feature_id = feature_id or middle:match("%([ \t]*\"(.-)\"")
+				name = name or middle:match(",[ \t]*\"(.-)\"")
 			end
 			feature_id = feature_id or "<FEATURE_ID>"
 			name = name or "<NAME>"
