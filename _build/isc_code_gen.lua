@@ -1,6 +1,12 @@
 local ISC_Code_Gen = {}
 
 
+local ArrayMT = {}
+function ISC_Code_Gen.array(typ)
+	return setmetatable({typ=typ}, ArrayMT)
+end
+
+
 --- tables are not deterministic, this is used to be deterministic.
 ---@param spec table
 ---@return string[]
@@ -34,36 +40,49 @@ function ISC_Code_Gen._gen_encode_code(spec)
 	local type_parts = {}
 	local function _gen(_spec, path)
 		if type(_spec) == "table" then
-			table.insert(result_parts, "{")
-			table.insert(type_parts, "{")
-			local sorted_keys = _get_sorted_spec_keys(_spec)
-			for _, key in ipairs(sorted_keys) do
-				local value_spec = _spec[key]
-				local key_index, key_path
-				if type(key) == "string" then
-					if key:match("^[%w_][%w%d_]*$") then
-						key_index = ("%s"):format(key:gsub("\n", "\\n"):gsub("\r", "\\r"))
-						key_path = ("%s.%s"):format(path, key_index)
-					else
-						key_index = ("[\"%s\"]"):format(key:gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("\r", "\\r"))
+			local mt = getmetatable(_spec)
+			if mt == ArrayMT then
+				local typ = _spec.typ
+				local encode_code, decode_code, type_comment = ISC_Code_Gen._gen_encode_code(typ)
+				table.insert(pack_fmt, "I2s2")
+				local tmp_name_length = _get_tmp_name()
+				table.insert(pack_args, ("#%s"):format(path))
+				local tmp_name_data = _get_tmp_name()
+				table.insert(pack_args, ("ISC._encode_array(%s, %s)"):format(encode_code, path))
+				table.insert(result_parts, ("ISC._decode_array(%s, %s, %s)"):format(decode_code, tmp_name_data, tmp_name_length))
+				table.insert(type_parts, ("%s[]"):format(type_comment))
+			else
+				table.insert(result_parts, "{")
+				table.insert(type_parts, "{")
+				local sorted_keys = _get_sorted_spec_keys(_spec)
+				for _, key in ipairs(sorted_keys) do
+					local value_spec = _spec[key]
+					local key_index, key_path
+					if type(key) == "string" then
+						if key:match("^[%w_][%w%d_]*$") then
+							key_index = ("%s"):format(key:gsub("\n", "\\n"):gsub("\r", "\\r"))
+							key_path = ("%s.%s"):format(path, key_index)
+						else
+							key_index = ("[\"%s\"]"):format(key:gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("\r", "\\r"))
+							key_path = ("%s%s"):format(path, key_index)
+						end
+					elseif type(key) == "number" then
+						key_index = ("[%s]"):format(key)
 						key_path = ("%s%s"):format(path, key_index)
+					else
+						error(("Unsupported ISC table key spec type '%s'"):format(_spec))
 					end
-				elseif type(key) == "number" then
-					key_index = ("[%s]"):format(key)
-					key_path = ("%s%s"):format(path, key_index)
-				else
-					error(("Unsupported ISC table key spec type '%s'"):format(_spec))
+					table.insert(result_parts, key_index)
+					table.insert(type_parts, key_index)
+					table.insert(result_parts, "=")
+					table.insert(type_parts, ":")
+					_gen(value_spec, key_path)
+					table.insert(result_parts, ",")
+					table.insert(type_parts, ",")
 				end
-				table.insert(result_parts, key_index)
-				table.insert(type_parts, key_index)
-				table.insert(result_parts, "=")
-				table.insert(type_parts, ":")
-				_gen(value_spec, key_path)
-				table.insert(result_parts, ",")
-				table.insert(type_parts, ",")
+				table.insert(result_parts, "}")
+				table.insert(type_parts, "}")
 			end
-			table.insert(result_parts, "}")
-			table.insert(type_parts, "}")
 		elseif _spec == "string" then
 			table.insert(pack_fmt, "z")
 			table.insert(pack_args, path)
@@ -87,15 +106,15 @@ function ISC_Code_Gen._gen_encode_code(spec)
 	local decode_code
 	if spec == "nil" then
 		encode_code = "function(data) return \"\" end"
-		decode_code = "function(encoded_data) return nil end"
+		decode_code = "function(encoded_data, offset) return nil, offset end"
 	else
 		_gen(spec, "data")
 		if #tmp_names > 0 then
 			encode_code = ("function(data) return string.pack(\"%s\", %s) end"):format(table.concat(pack_fmt), table.concat(pack_args, ", "))
-			decode_code = ("function(encoded_data) local %s = string.unpack(\"%s\", encoded_data) return %s end"):format(table.concat(tmp_names, ", "), table.concat(pack_fmt), table.concat(result_parts))
+			decode_code = ("function(encoded_data, offset) local %s, offset = string.unpack(\"%s\", encoded_data, offset) return %s, offset end"):format(table.concat(tmp_names, ", "), table.concat(pack_fmt), table.concat(result_parts))
 		else
 			encode_code = "function(data) return \"\" end"
-			decode_code = "function(encoded_data) return {} end"
+			decode_code = "function(encoded_data, offset) return {}, offset end"
 		end
 	end
 	local type_comment = table.concat(type_parts)
@@ -119,7 +138,7 @@ function ISC_Code_Gen.gen_event(feature_id, name, data_spec)
 		return nil, "Invalid event name"
 	end
 	local encode_data_code, decode_data_code, type_data_comment = ISC_Code_Gen._gen_encode_code(data_spec)
-	return ("---@type ISC_Event<%s>\n%s = ISC.registerEvent(\"%s\", \"%s\", %s, %s)"):format(type_data_comment, name, feature_id, name, encode_data_code, decode_data_code)
+	return ("---@type ISC_Event<%s>\n%s = ISC.registerEvent(\"%s\", \"%s\", --[[@diagnostic disable-line]]%s, %s)"):format(type_data_comment, name, feature_id, name, encode_data_code, decode_data_code)
 end
 
 ---@param feature_id string
@@ -135,7 +154,7 @@ function ISC_Code_Gen.gen_request(feature_id, name, data_spec, result_spec)
 	end
 	local encode_data_code, decode_data_code, type_data_comment = ISC_Code_Gen._gen_encode_code(data_spec)
 	local encode_result_code, decode_result_code, type_result_comment = ISC_Code_Gen._gen_encode_code(result_spec)
-	return ("---@type ISC_Request<%s,%s>\n%s = ISC.registerRequest(\"%s\", \"%s\", %s, %s, %s, %s)"):format(type_data_comment, type_result_comment, name, feature_id, name, encode_data_code, decode_data_code, encode_result_code, decode_result_code)
+	return ("---@type ISC_Request<%s,%s>\n%s = ISC.registerRequest(\"%s\", \"%s\", --[[@diagnostic disable-line]]%s, %s, %s, %s)"):format(type_data_comment, type_result_comment, name, feature_id, name, encode_data_code, decode_data_code, encode_result_code, decode_result_code)
 end
 
 

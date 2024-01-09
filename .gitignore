@@ -3,5 +3,3 @@
 /_build/_build.lua
 # Don't want to deal with paths from LBAPI
 /.vscode/
-
-times.txt

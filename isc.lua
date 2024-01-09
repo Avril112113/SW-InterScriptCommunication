@@ -145,6 +145,32 @@ function ISC._repr_value(value, depth, nl, indent)
 	return tostring(value)
 end
 
+---@param encode fun(data:any):string
+---@param data any[]
+function ISC._encode_array(encode, data)
+	local parts = {}
+	for i, v in ipairs(data) do
+		table.insert(parts, encode(v))
+	end
+	return table.concat(parts)
+end
+
+---@param decode fun(encoded_data:string, offset:integer): any, integer
+---@param data string
+---@param count integer
+---@param offset integer?
+---@return any, integer
+function ISC._decode_array(decode, data, count, offset)
+	local values = {}
+	offset = offset or 1
+	local value
+	for i=1,count do
+		value, offset = decode(data, offset)
+		table.insert(values, value)
+	end
+	return values, offset
+end
+
 ---@param full_message string
 ---@param player_allowed boolean
 ---@param peer_id integer
@@ -183,7 +209,7 @@ function ISC.onCustomCommand(full_message, peer_id, player_allowed)
 					server.announce("ISC-"..ADDON_NAME, ("Request %s:%s was not handled."):format(feature_id, name), peer_id)
 					return true
 				end
-				local result = request._decode_result(ISC._tmp_result:gsub("\x15\x15\x15", "\x00"))
+				local result = request._decode_result(ISC._tmp_result:gsub("\x15\x15\x15", "\x00"), 1)
 				ISC._tmp_result = nil
 				ISC._verbose(("Handled request '%s:%s' ran by '%s' with data %s and result %s"):format(feature_id, name, player_name, ISC._repr_value(parsed_data), ISC._repr_value(result)))
 				server.announce("ISC-"..ADDON_NAME, ("Request %s:%s handled"):format(feature_id, name) .. "\n" .. ISC._repr_value(result), peer_id)
@@ -266,7 +292,7 @@ end
 ---@param feature_id string
 ---@param name string
 ---@param encode_data fun(data:TData):string
----@param decode_data fun(encoded_data:string):TData
+---@param decode_data fun(encoded_data:string, offset:integer): TData, integer
 ---@return ISC_Event<TData>
 function ISC.registerEvent(feature_id, name, encode_data, decode_data)
 	ISC._validate_cmd_name_part("event feature_id", feature_id)
@@ -295,7 +321,7 @@ function ISC.registerEvent(feature_id, name, encode_data, decode_data)
 			table.insert(handlers, cb)
 		end,
 		_run_handlers=function(encoded_data)
-			local data = decode_data(encoded_data:gsub("\x15\x15\x15", "\x00"))
+			local data = decode_data(encoded_data:gsub("\x15\x15\x15", "\x00"), 1)
 			for _, handler in ipairs(handlers) do
 				handler(data)
 			end
@@ -315,9 +341,9 @@ end
 ---@param feature_id string
 ---@param name string
 ---@param encode_data fun(data:TResult):string
----@param decode_data fun(encoded_data:string):TResult
+---@param decode_data fun(encoded_data:string, offset:integer): TResult, integer
 ---@param encode_result fun(data:TResult):string
----@param decode_result fun(encoded_data:string):TResult
+---@param decode_result fun(encoded_data:string, offset:integer): TResult, integer
 ---@return ISC_Request<TData,TResult>
 function ISC.registerRequest(feature_id, name, encode_data, decode_data, encode_result, decode_result)
 	ISC._validate_cmd_name_part("event feature_id", feature_id)
@@ -339,7 +365,7 @@ function ISC.registerRequest(feature_id, name, encode_data, decode_data, encode_
 			if ISC._tmp_result == nil then
 				ISC._error(("Request '%s:%s' was never handled!"):format(feature_id, name))
 			end
-			local result = decode_result(ISC._tmp_result:gsub("\x15\x15\x15", "\x00"))
+			local result = decode_result(ISC._tmp_result:gsub("\x15\x15\x15", "\x00"), 1)
 			ISC._tmp_result = nil
 			return result
 		end,
@@ -347,7 +373,7 @@ function ISC.registerRequest(feature_id, name, encode_data, decode_data, encode_
 			handler = cb
 		end,
 		_run_handler=function(encoded_data)
-			local data = decode_data(encoded_data:gsub("\x15\x15\x15", "\x00"))
+			local data = decode_data(encoded_data:gsub("\x15\x15\x15", "\x00"), 1)
 			if handler ~= nil then
 				local result = handler(data)
 				local encoded_result = encode_result(result):gsub("\x00", "\x15\x15\x15")
@@ -378,7 +404,7 @@ end
 
 --                 \/ Copied from ISC_DiscoveredFeature
 ---@type ISC_Event<{isc_version:string, feature_id:string, version:string}> # ISC:discovery
-ISC._feature_discovery_event = ISC.registerEvent("ISC", "discovery", function(data) return string.pack("zzz", data.feature_id, data.isc_version, data.version) end, function(encoded_data) local _1, _2, _3 = string.unpack("zzz", encoded_data) return {feature_id=_1,isc_version=_2,version=_3,} end)
+ISC._feature_discovery_event = ISC.registerEvent("ISC", "discovery", --[[@diagnostic disable-line]]function(data) return string.pack("zzz", data.feature_id, data.isc_version, data.version) end, function(encoded_data, offset) local _1, _2, _3, offset = string.unpack("zzz", encoded_data, offset) return {feature_id=_1,isc_version=_2,version=_3,}, offset end)
 
 
 ISC._feature_discovery_event.handle(function(data)

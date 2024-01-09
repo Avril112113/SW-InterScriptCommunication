@@ -38,5 +38,4 @@ It's possible to add multiple handlers to a request with in different addons.
 
 
 ## TODO
-Variable length arrays.  
 Check for `server.command` max command length, if so, split data into multiple calls.  

@@ -11,9 +11,6 @@
 package.path = package.path .. ";../AvrilsSWTools/AddonUpdater/?.lua"
 local update_addon = require "update_addon"
 
-package.path = package.path .. ";../AvrilsSWTools/CodeGen_RequireFolder/?.lua"
-local require_folder = require "require_folder"
-
 local update_isc_code = require "_build.update_isc_code"
 
 
@@ -34,7 +31,6 @@ end
 ---@param name string               "require"-style name of the script that's about to be built
 ---@param inputFile Filepath        filepath to the file that is about to be built
 function onLBBuildFileStarted(builder, params, workspaceRoot, name, inputFile)
-	require_folder(workspaceRoot, inputFile)
 	update_isc_code(workspaceRoot, inputFile)
 end
 

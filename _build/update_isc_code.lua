@@ -1,4 +1,4 @@
-local isc_code_gen = require "_build.isc_code_gen"
+local ISC_CodeGen = require "_build.isc_code_gen"
 
 
 ---@param s string
@@ -32,15 +32,23 @@ local function parse_spec_info(spec_info)
 	local specs = {}
 	local i = 0
 	while true do
-		local match, ni = spec_info:match("^[ ]*(%b{})[ ]*,?()", i)
+		local match, array, ni = spec_info:match("^[ ]*(%b{})(%[?%]?)[ ]*,?()", i)
 		if match then
 			i = ni
-			table.insert(specs, parse_luals_table(match))
+			if #array ~= 0 then
+				table.insert(specs, ISC_CodeGen.array(parse_luals_table(match)))
+			else
+				table.insert(specs, parse_luals_table(match))
+			end
 		else
-			match, ni = spec_info:match("^[ ]*([%w_][%d%w_]*)[ ]*,?()", i)
+			match, array, ni = spec_info:match("^[ ]*([%w_][%d%w_]*)(%[?%]?)[ ]*,?()", i)
 			if match then
 				i = ni
-				table.insert(specs, match)
+				if #array ~= 0 then
+					table.insert(specs, ISC_CodeGen.array(match))
+				else
+					table.insert(specs, match)
+				end
 			else
 				break
 			end
@@ -85,12 +93,12 @@ return function(workspaceRoot, inputFile)
 			name = name or "<NAME>"
 			local code
 			if isc_type == "Event" and #specs == 1 then
-				local encode_data_code, decode_data_code = isc_code_gen._gen_encode_code(specs[1])
-				code = ("ISC.registerEvent(\"%s\", \"%s\", %s, %s)"):format(feature_id, name, encode_data_code, decode_data_code)
+				local encode_data_code, decode_data_code = ISC_CodeGen._gen_encode_code(specs[1])
+				code = ("ISC.registerEvent(\"%s\", \"%s\", --[[@diagnostic disable-line]]%s, %s)"):format(feature_id, name, encode_data_code, decode_data_code)
 			elseif isc_type == "Request" and #specs == 2 then
-				local encode_data_code, decode_data_code = isc_code_gen._gen_encode_code(specs[1])
-				local encode_result_code, decode_result_code = isc_code_gen._gen_encode_code(specs[2])
-				code = ("ISC.registerRequest(\"%s\", \"%s\", %s, %s, %s, %s)"):format(feature_id, name, encode_data_code, decode_data_code, encode_result_code, decode_result_code)
+				local encode_data_code, decode_data_code = ISC_CodeGen._gen_encode_code(specs[1])
+				local encode_result_code, decode_result_code = ISC_CodeGen._gen_encode_code(specs[2])
+				code = ("ISC.registerRequest(\"%s\", \"%s\", --[[@diagnostic disable-line]]%s, %s, %s, %s)"):format(feature_id, name, encode_data_code, decode_data_code, encode_result_code, decode_result_code)
 			else
 				return
 			end
